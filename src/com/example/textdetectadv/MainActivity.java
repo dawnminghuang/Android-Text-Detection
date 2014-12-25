@@ -13,10 +13,12 @@ import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfKeyPoint;
+import org.opencv.core.MatOfPoint;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
 import org.opencv.features2d.FeatureDetector;
 import org.opencv.features2d.KeyPoint;
+import org.opencv.imgproc.Imgproc;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -100,7 +102,6 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 	public void onCameraViewStarted(int width, int height) {
 		mRgba = new Mat(height, width, CvType.CV_8UC3);
 		mByte = new Mat(height, width, CvType.CV_8UC1);
-
 	}
 
 	public void onCameraViewStopped() {
@@ -109,6 +110,8 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 	}
 
 	public Mat onCameraFrame(CvCameraViewFrame inputFrame) {
+
+		//
 		mRgba = inputFrame.rgba();
 		mGray = inputFrame.gray();
 		CONTOUR_COLOR = new Scalar(255);
@@ -116,16 +119,29 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 		List<KeyPoint> listpoint = new ArrayList<KeyPoint>();
 		KeyPoint kpoint = new KeyPoint();
 		Mat mask = Mat.zeros(mGray.size(), CvType.CV_8UC1);
-		Mat output = new Mat();
 		int rectanx1;
 		int rectany1;
 		int rectanx2;
 		int rectany2;
+
+		//
+		Scalar zeos = new Scalar(0, 0, 0);
+		List<MatOfPoint> contour1 = new ArrayList<MatOfPoint>();
+		List<MatOfPoint> contour2 = new ArrayList<MatOfPoint>();
+		Mat kernel = new Mat(1, 50, CvType.CV_8UC1, Scalar.all(255));
+		Mat morbyte = new Mat();
+		Mat hierarchy = new Mat();
+
+		Rect rectan2 = new Rect();//
+		Rect rectan3 = new Rect();//
+		int imgsize = mRgba.height() * mRgba.width();
+		//
 		if (isProcess) {
 			FeatureDetector detector = FeatureDetector
 					.create(FeatureDetector.MSER);
 			detector.detect(mGray, keypoint);
 			listpoint = keypoint.toList();
+			//
 			for (int ind = 0; ind < listpoint.size(); ind++) {
 				kpoint = listpoint.get(ind);
 				rectanx1 = (int) (kpoint.pt.x - 0.5 * kpoint.size);
@@ -134,12 +150,47 @@ public class MainActivity extends Activity implements CvCameraViewListener2 {
 				// rectany2 = (int) (kpoint.pt.y + 0.5 * kpoint.size);
 				rectanx2 = (int) (kpoint.size);
 				rectany2 = (int) (kpoint.size);
-
-				Rect rectan1 = new Rect(rectanx1, rectany1, rectanx2, rectany2);
-				Mat roi = new Mat(mask, rectan1);
+				if (rectanx1 <= 0)
+					rectanx1 = 1;
+				if (rectany1 <= 0)
+					rectany1 = 1;
+				if ((rectanx1 + rectanx2) > mGray.width())
+					rectanx2 = mGray.width() - rectanx1;
+				if ((rectany1 + rectany2) > mGray.height())
+					rectany2 = mGray.height() - rectany1;
+				Rect rectant = new Rect(rectanx1, rectany1, rectanx2, rectany2);
+				Mat roi = new Mat(mask, rectant);
 				roi.setTo(CONTOUR_COLOR);
-				Core.rectangle(mRgba, rectan1.br(), rectan1.tl(), CONTOUR_COLOR);
+
 			}
+			/*
+			 * Imgproc.findContours(mask, contour1, hierarchy,
+			 * Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
+			 * 
+			 * 
+			 * for (int ind = 0; ind < contour1.size(); ind++) { rectan2 =
+			 * Imgproc.boundingRect(contour1.get(ind)); if (rectan2.area() > 0.3
+			 * * imgsize || rectan2.area() < 50 || (rectan2.width /
+			 * rectan2.height) > 3 || (rectan2.width / rectan2.height) < 0.1) {
+			 * Mat roi = new Mat(mask, rectan2); roi.setTo(zeos);
+			 * 
+			 * } }
+			 */
+			Imgproc.morphologyEx(mask, morbyte, Imgproc.MORPH_DILATE, kernel);
+			Imgproc.findContours(morbyte, contour2, hierarchy,
+					Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_NONE);
+			for (int ind = 0; ind < contour2.size(); ind++) {
+				rectan3 = Imgproc.boundingRect(contour2.get(ind));
+				if (rectan3.area() > 0.5 * imgsize || rectan3.area() < 100
+						|| rectan3.width / rectan3.height < 2) {
+					Mat roi = new Mat(morbyte, rectan3);
+					roi.setTo(zeos);
+
+				} else
+					Core.rectangle(mRgba, rectan3.br(), rectan3.tl(),
+							CONTOUR_COLOR);
+			}
+
 			return mRgba;
 		}
 		/*
